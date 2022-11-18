@@ -24,6 +24,13 @@
         "prettier"
     ],
     "rules": {
+        "react/function-component-definition": "off",
+        "no-continue": "off",
+        "jsx-a11y/label-has-associated-control": "off",
+        "jsx-a11y/no-static-element-interactions": "off",
+        "jsx-a11y/click-events-have-key-events": "off",
+        "no-shadow": "off",
+        "@typescript-eslint/no-shadow": "off",
         "@typescript-eslint/no-non-null-assertion": "off",
         "react/require-default-props": "off",
         "react/button-has-type": "off",
@@ -40,11 +47,9 @@
                 "tsx": "never"
             }
         ],
-        "@typescript-eslint/no-shadow": ["error"],
         "react-hooks/rules-of-hooks": "error",
         "react-hooks/exhaustive-deps": "error",
         "import/prefer-default-export": "off",
-        "react/function-component-definition": "off",
         "react/prop-types": "off",
         "react/jsx-props-no-spreading": "off",
         "@typescript-eslint/no-unused-vars": "error",
