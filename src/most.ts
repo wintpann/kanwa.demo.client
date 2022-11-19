@@ -6,6 +6,7 @@ import {
   observable,
   onBecomeObserved,
   onBecomeUnobserved,
+  reaction,
   toJS,
 } from 'mobx';
 
@@ -67,9 +68,13 @@ const interval = (ms: number) =>
   new Observable(0, (subscriber) => {
     let interval: number;
 
+    // @ts-ignore
+    window.increaseSource = () => subscriber.next(subscriber.value + 1);
+
     return {
       start: () => {
         interval = window.setInterval(() => {
+          console.log('LOOOG source updated')
           subscriber.next(subscriber.value + 1);
         }, ms);
       },
@@ -77,21 +82,52 @@ const interval = (ms: number) =>
         clearInterval(interval);
       },
       resume: () => {
+        console.log('LOOOG next value');
         subscriber.next(subscriber.value + 1);
 
         interval = window.setInterval(() => {
+          console.log('LOOOG interval');
           subscriber.next(subscriber.value + 1);
         }, ms);
       },
     };
   });
 
-const source = interval(200);
+const source = interval(1000);
 
-const stop = autorun(() => {
-  console.log('LOOOG value read', source.value);
+const doubled = new Observable(source.value * 2, (subscriber) => {
+  let dispose: (() => void) | undefined;
+  return {
+    start: () => {
+      console.log('LOOOG start doubled');
+      subscriber.next(source.value * 2);
+      dispose = reaction(
+        () => source.value,
+        (value) => {
+          console.log('LOOOG doubled next');
+          subscriber.next(value * 2);
+        },
+      );
+    },
+    pause: () => {
+      dispose?.();
+      dispose = undefined;
+    },
+  };
 });
 
-setTimeout(() => {
-  stop();
-}, 1000);
+// @ts-ignore
+window.run = () => {
+  const stop = autorun(() => {
+    console.log('LOOOG subscription')
+    console.log('LOOOG value read', doubled.value);
+  });
+
+  // @ts-ignore
+  window.stop = stop;
+};
+
+// @ts-ignore
+window.doubled = doubled;
+// @ts-ignore
+window.source = source;
