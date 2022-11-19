@@ -1,10 +1,7 @@
-// import React from 'react';
-// import { createRoot } from 'react-dom/client';
-//
-// const App = () => <div>work</div>;
-//
-// createRoot(document.getElementById('root') as HTMLElement).render(<App />);
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import './most';
 
-import { run } from '@/todolist/app';
+const App = () => <div>work</div>;
 
-run();
+createRoot(document.getElementById('root') as HTMLElement).render(<App />);
