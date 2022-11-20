@@ -7,7 +7,15 @@ export const fromClass = <T extends object>(
   Target: Class<T>,
   overrides?: Parameters<typeof makeAutoObservable<T>>[1],
   options?: Parameters<typeof makeAutoObservable<T>>[2],
-) => new Target();
+) => {
+  const target = makeAutoObservable(new Target(), overrides, options);
+  Object.values(target).forEach((v) => {
+    if (v.type === 'effect') {
+      v.fn();
+    }
+  });
+  return target;
+};
 
 type RemoteData<T, U> = {
   data: T | undefined;
@@ -68,10 +76,5 @@ export const useLiveData = <T, U, Args>(
 
 export const createEffect = (fn: () => void) => ({
   type: 'effect',
-  fn,
-});
-
-export const createLocalEffect = (fn: () => void) => ({
-  type: 'localeffect',
   fn,
 });
