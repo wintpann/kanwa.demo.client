@@ -1,13 +1,10 @@
 import {
   action,
   autorun,
-  configure,
   makeAutoObservable,
-  observable,
   onBecomeObserved,
   onBecomeUnobserved,
   reaction,
-  toJS,
 } from 'mobx';
 
 type Subscription = {
@@ -16,65 +13,86 @@ type Subscription = {
   resume?: () => void;
 };
 
+type Subscribe<T> = (subscriber: { next: (value: T) => void; value: T }) => Subscription;
+
 class Observable<T> {
   value: T;
 
-  constructor(
-    initial: T,
-    subscribe: (subscriber: { next: (value: T) => void; value: T }) => Subscription,
-  ) {
+  next = action((value: T) => {
+    this.value = value;
+  });
+
+  _isStarted = false;
+
+  _subscription: Subscription | undefined;
+
+  constructor(initial: T, subscribe: Subscribe<T>) {
     this.value = initial;
-
-    const next = (value: T) => {
-      this.value = value;
-    };
-    const nextAction = action(next);
-    const getValue = () => this.value;
-
-    let subscription: Subscription | undefined;
-    let isStarted = false;
 
     makeAutoObservable(this);
 
-    const onObserved = () => {
-      if (!subscription) {
-        subscription = subscribe({
-          next: nextAction,
-          get value() {
-            return getValue();
-          },
-        });
-      }
-
-      if (isStarted && subscription.resume) {
-        subscription.resume();
-      } else {
-        subscription.start();
-      }
-
-      isStarted = true;
-    };
-
-    const onUnobserved = () => {
-      subscription!.pause();
-    };
-
-    onBecomeObserved(this, 'value', onObserved);
-    onBecomeUnobserved(this, 'value', onUnobserved);
+    onBecomeObserved(this, 'value', this._createOnObserved(subscribe));
+    onBecomeUnobserved(this, 'value', this._onUnobserved);
   }
+
+  _onUnobserved = () => {
+    this._subscription!.pause();
+  };
+
+  _createOnObserved = (subscribe: Subscribe<T>) => () => {
+    const getValue = () => this.value;
+
+    if (!this._subscription) {
+      this._subscription = subscribe({
+        next: this.next,
+        get value() {
+          return getValue();
+        },
+      });
+    }
+
+    if (this._isStarted && this._subscription.resume) {
+      this._subscription.resume();
+    } else {
+      this._subscription.start();
+      this._isStarted = true;
+    }
+  };
+
+  pipe = <U>(fn: (source: Observable<T>) => Observable<U>): Observable<U> => {
+    return fn(this as unknown as Observable<T>);
+  };
 }
+
+const map =
+  <T, U>(fn: (value: T) => U) =>
+  (source: Observable<T>) =>
+    new Observable(fn(source.value), (subscriber) => {
+      let dispose: (() => void) | undefined;
+      return {
+        start: () => {
+          subscriber.next(fn(source.value));
+          dispose = reaction(
+            () => source.value,
+            (value) => {
+              subscriber.next(fn(value));
+            },
+          );
+        },
+        pause: () => {
+          dispose?.();
+          dispose = undefined;
+        },
+      };
+    });
 
 const interval = (ms: number) =>
   new Observable(0, (subscriber) => {
     let interval: number;
 
-    // @ts-ignore
-    window.increaseSource = () => subscriber.next(subscriber.value + 1);
-
     return {
       start: () => {
         interval = window.setInterval(() => {
-          console.log('LOOOG source updated')
           subscriber.next(subscriber.value + 1);
         }, ms);
       },
@@ -82,11 +100,9 @@ const interval = (ms: number) =>
         clearInterval(interval);
       },
       resume: () => {
-        console.log('LOOOG next value');
         subscriber.next(subscriber.value + 1);
 
         interval = window.setInterval(() => {
-          console.log('LOOOG interval');
           subscriber.next(subscriber.value + 1);
         }, ms);
       },
@@ -94,40 +110,14 @@ const interval = (ms: number) =>
   });
 
 const source = interval(1000);
-
-const doubled = new Observable(source.value * 2, (subscriber) => {
-  let dispose: (() => void) | undefined;
-  return {
-    start: () => {
-      console.log('LOOOG start doubled');
-      subscriber.next(source.value * 2);
-      dispose = reaction(
-        () => source.value,
-        (value) => {
-          console.log('LOOOG doubled next');
-          subscriber.next(value * 2);
-        },
-      );
-    },
-    pause: () => {
-      dispose?.();
-      dispose = undefined;
-    },
-  };
-});
+const doubled = source.pipe(map((v) => v * 2));
 
 // @ts-ignore
 window.run = () => {
   const stop = autorun(() => {
-    console.log('LOOOG subscription')
-    console.log('LOOOG value read', doubled.value);
+    console.log('LOOOG doubled read', doubled.value);
   });
 
   // @ts-ignore
   window.stop = stop;
 };
-
-// @ts-ignore
-window.doubled = doubled;
-// @ts-ignore
-window.source = source;
