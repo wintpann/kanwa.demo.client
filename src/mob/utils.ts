@@ -1,5 +1,5 @@
 import { makeAutoObservable, reaction, toJS, isObservable } from 'mobx';
-import { useEffect, useState } from 'react';
+import { FC, memo, useEffect, useState } from 'react';
 
 const noop = (): void => undefined;
 
@@ -99,8 +99,10 @@ export const createViewModel = <T extends object>(
   return viewModel;
 };
 
-const sourceToJS = <T extends Record<string, unknown>>(source: () => T): T => {
-  let target: Record<string, unknown> = source();
+type UnknownRecord = Record<string, unknown>;
+
+const sourceToJS = <T extends UnknownRecord>(source: () => T): T => {
+  let target: UnknownRecord = source();
   if (isObservable(target)) {
     target = toJS(target);
   }
@@ -112,9 +114,18 @@ const sourceToJS = <T extends Record<string, unknown>>(source: () => T): T => {
   return target as T;
 };
 
-export const useObserver = <T extends Record<string, unknown>>(source: () => T): T => {
+export const useObserver = <T extends UnknownRecord>(source: () => T): T => {
   const [state, setState] = useState(() => sourceToJS(source));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => reaction(() => sourceToJS(source), setState), []);
   return state;
+};
+
+export const component = <Props extends UnknownRecord>(
+  name: string,
+  view: (props: Props) => JSX.Element,
+): FC<Props> => {
+  const wrapped = memo(view);
+  wrapped.displayName = name;
+  return wrapped as unknown as FC<Props>;
 };
