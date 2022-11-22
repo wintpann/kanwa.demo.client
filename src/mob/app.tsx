@@ -1,58 +1,88 @@
-import { createEffect, fromClass, liveData, useLiveData } from '@/mob/utils';
-import { observer } from 'mobx-react-lite';
-import { makeAutoObservable, reaction, toJS, when } from 'mobx';
-import { useEffect } from 'react';
+import React, { FC, useState } from 'react';
+import { di } from '@kanwa/di';
+import { injectStores } from '@mobx-devtools/tools';
+import { createViewModel, createEffect, useObserver, Effect } from '@/mob/utils';
+import { reaction } from 'mobx';
 
 type Todo = {
   title: string;
+  checked: boolean;
+  id: number;
 };
 
-const getTodos = (): Promise<Todo[]> =>
-  new Promise((resolve) => {
-    setTimeout(() => {
-      resolve([{ title: '12' }] as Todo[]);
-    }, 2000);
-  });
+const createTodo = (title: string): Todo => ({ title, checked: false, id: Date.now() });
 
-const getTodos2 = (): Promise<Todo[]> =>
-  new Promise((resolve) => {
-    setTimeout(() => {
-      resolve([{ title: '12' }] as Todo[]);
-    }, 2000);
-  });
+export type TodosViewModel = {
+  todos: Todo[];
+  addTodo: (title: string) => void;
+  onTodosChanged: Effect;
+};
 
-const vm = fromClass(
-  class VM {
-    todos = liveData(getTodos);
+const todosViewModel = di.record(
+  (): TodosViewModel =>
+    createViewModel(
+      class TodosViewModel {
+        todos: Todo[] = [];
 
-    todos2 = liveData(getTodos2);
+        addTodo = (title: string) => {
+          this.todos.push(createTodo(title));
+        };
 
-    setUp = async () => {
-      await when(() => this.todos2.value.status === 'success');
-      console.log('LOOOG DONE!');
-    };
-
-    someEffect = createEffect(() => {
-      reaction(
-        () => this.todos.value.status,
-        (status) => {
-          console.log('LOOOG status changed', status);
-          if (status === 'success') {
-            this.todos2.fetch();
-          }
-        },
-      );
-    });
-  },
+        onTodosChanged = createEffect(() =>
+          reaction(
+            () => this.todos.length,
+            () => {
+              console.log('LOOOG todos changed reaction');
+            },
+          ),
+        );
+      },
+    ),
 );
 
-export const App = observer(() => {
-  const todos = useLiveData(vm.todos, undefined);
-  console.log('LOOOG todos', todos);
-  console.log('LOOOG todos2', toJS(vm.todos2.value));
+const store = todosViewModel();
+// @ts-ignore
+window.store = store;
+injectStores({ store });
 
-  useEffect(() => {
-    vm.setUp();
-  }, []);
-  return null;
+const TodoItem: FC<{ todo: Todo }> = ({ todo }) => <div>{todo.title}</div>;
+
+const Input = di.record(todosViewModel, (todosViewModel) => () => {
+  const [value, setValue] = useState('');
+
+  const create = () => {
+    todosViewModel.addTodo(value);
+    setValue('');
+  };
+
+  return (
+    <div>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyPress={(e) => {
+          if (e.key === 'Enter') {
+            create();
+          }
+        }}
+      />
+      <button onClick={create}>create</button>
+    </div>
+  );
 });
+
+const AppRecord = di.record(todosViewModel, Input, (todosViewModel, Input) => () => {
+  const { todos } = useObserver(() => ({ todos: todosViewModel.todos }));
+
+  return (
+    <div>
+      <Input />
+      {todos.map((todo) => (
+        <TodoItem key={todo.id} todo={todo} />
+      ))}
+    </div>
+  );
+});
+
+export const App = AppRecord();
